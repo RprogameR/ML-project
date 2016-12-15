@@ -1,0 +1,122 @@
+---
+title: " Predicting Weight Lifting Technique - Random Forest - Sensor Data"  
+subtitle: "Practical Machine Learning Course Project"
+author: "Thymios C"
+date: "16 December 2016"
+output:
+  html_document: default
+  pdf_document: default
+keep_md: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+##Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+The goal of this report is to predict the manner in which they did the exercise.
+
+##Exploring the Dataset
+
+First of all, let's read and take a look at the dataset.
+
+```{r}
+#load libraries & data
+library(caret)
+
+data<- read.csv("pml-training.csv")
+data_test <- read.csv("pml-testing.csv")
+
+class(data$classe)
+```
+
+```{r}
+dim(data)
+```
+
+```{r}
+summary(data[, 1:10])
+```
+
+```{r}
+str(data[, 1:10])
+```
+
+> Our dataset has 160 variables.
+
+### Remove Missing Values
+
+We will find and remove all the variables that have more missing than non-missing values from the dataset.
+
+```{r}
+missing1 <- which(apply(data, 2, function(x) sum(is.na(x))>length(x)/2))
+missing2 <- which(apply(data, 2, function(x) sum(x=="")>length(x)/2))
+
+data_clean <- subset(data, select = -c(missing1,missing2))
+
+dim(data_clean)
+```
+
+So we managed to reduce the dimensions of the dataset from 160 to 60. 
+
+### Remove Redundant Variables
+
+The variables that had nothing to do with movement and the first variable X which is just an index were removed
+
+```{r}
+data_ready  <- data_clean [,-c(1:6)]
+```
+
+Before we continue we will slice the train data into train and test datasets 
+using `createDataPartition` function.
+
+```{r}
+# Setting seed in order to make results reproducable
+set.seed(42)
+# create 80%/20% for training and validation datasets
+validationIndex <- createDataPartition(data_clean$classe,p = 0.8,list = FALSE)
+training <- data_ready [validationIndex,]
+validation <- data_ready [-validationIndex,]
+```
+
+Now that our datasets are ready we will use the `training` data to train and tune our model and the `validation` data as an out of sample dataset in order to test the final model.
+
+## Model Fitting
+
+We are going to use cross-validation to estimate the error on the validation set by specificying method = "cv" within the trainControl().
+
+```{r,cache=TRUE}
+set.seed(42)
+trainControl <- trainControl(method = "cv", number = 5,  allowParallel = TRUE)
+fit.rf<- train(classe ~ ., data =training, method="rf", metric = "Accuracy", trcontrol = trainControl)
+print(fit.rf)  
+print(fit.rf$finalModel)
+```
+
+We can see that the OOB error rate is 0.15%.
+
+## Test the Final Model 
+
+Next we will use the `validation` data as an *out of sample* dataset in order to test our fitted model and find out if the accuracy that we estimated is close to our results.
+
+```{r}
+## estimate skill on validation dataset
+set.seed(42)
+predictions <- predict(fit.rf, newdata=validation)
+confusionMatrix(predictions, validation$classe)
+```
+
+The accuracy for the `validation` set is 99.6%  with a 95% confidence interval.
+
+##Predicting the 20 cases
+
+```{r}
+predict(fit.rf, newdata = data_test)
+```
+
+
+   
+
+
